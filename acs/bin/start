@@ -1,0 +1,72 @@
+#!/bin/bash
+
+
+AGENT=""
+
+if  [ ! -n "$JAR_FILE" ] ;then
+     JAR_FILE=bootapp.jar
+fi
+
+if  [ ! -n "$HTTP_PORT" ] ;then
+     HTTP_PORT=8080
+fi
+
+if  [ ! -n "$JAVA_OPTS" ] ;then
+     JAVA_OPTS=-Djava.security.egd=file:/dev/./urandom
+fi
+
+echo -e "HTTP_PORT:$HTTP_PORT\nJAR_FILE:$JAR_FILE\nJAVA_OPTS:$JAVA_OPTS"
+
+echo "FAT_JAR_PARAMS = $FAT_JAR_PARAMS"
+
+function ExportPath(){
+        echo "Begin ExportEnv"
+        export PATH=$PATH:/acs/user/jdk/bin:/acs/bin
+        export CLASSPATH=/acs/user/jdk/lib:$CLASSPATH
+        export LANG=en_US.UTF-8
+}
+
+function GetAgent(){
+        if  [ ! -n "$CONF_AGENT" ] ;then
+        echo "CONF_AGENT IS NULL"
+        else
+        echo "get agent"
+        echo "$CONF_AGENT"
+        echo "wget agentzip from $CONF_AGENT"
+        wget -nv -O /acs/agent.zip $CONF_AGENT
+        unzip -q -o /acs/agent.zip -d /acs/agent
+        AGENT=$(find /acs/agent  -name "*agent.jar" | head -n 1)
+        echo "agent app is $AGENT"
+        fi
+}
+
+function Start(){
+	rm -f tpid
+	if  [ ! -n "$AGENT" ] ;then
+	    exec java $CATALINA_OPTS $JAVA_OPTS -Dserver.port=$HTTP_PORT -jar /acs/src/$JAR_FILE ${FAT_JAR_PARAMS} > /dev/stdout 2>&1 &
+	else
+	    exec java -javaagent:$AGENT $CATALINA_OPTS $JAVA_OPTS -Dserver.port=$HTTP_PORT -jar /acs/src/$JAR_FILE ${FAT_JAR_PARAMS} > /dev/stdout 2>&1 &
+	fi
+	echo "/acs/src/$JAR_FILE"
+	echo $! > tpid
+	echo Start springboot Success!
+}
+
+function Cpapp(){
+	echo "Begin to copy app code to webapps"                                                                                                                                                                                         
+	CODE_EXIST=`ls /acs/code`                                                                                                                                                                                                    
+	if [ ! -z "$CODE_EXIST" ];then                                                                                                                                                                                              
+        rm -fr /acs/src/
+        mkdir -p /acs/src
+        cp -R /acs/code/* /acs/src/
+	fi
+}
+
+#main
+ExportPath
+
+GetAgent
+
+Cpapp
+
+Start
